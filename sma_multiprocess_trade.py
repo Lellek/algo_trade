@@ -18,8 +18,8 @@ logging.basicConfig(filename='Multi.log', level=logging.INFO)
 logging.getLogger().addHandler(logging.StreamHandler())
 
 # beide Ranges auch niedriger starten lassen nächstes mal
-SW_RANGE = range(10,51,5)
-LW_RANGE = range(100,201,10)
+SW_RANGE = range(5,51,5)
+LW_RANGE = range(60,201,10)
 
 
     
@@ -32,45 +32,52 @@ def create_Trade_df(df, shortwindow, longwindow):
     return dfTrade
 
 
-def buy(price, money):
+def buy(price, money, trade_fee):
     stock = math.floor(money/price)
-    money = money-stock*price
-    return stock, money
+    new_money = money-stock*price-(stock*price*trade_fee)
+    while new_money < 0:
+        stock += - 1
+        new_money = money-stock*price-(stock*price*trade_fee)
+        
+    return stock, new_money
 
-def sell(price, money, stock):
-    money += price * stock
+def sell(price, money, stock, trade_fee):
+    money += price * stock-(stock*price*trade_fee)
     return money
 
 
 # Trading strat: sell if sma_sw < sma_lw 
-def smatrade(stock_history , shortWindow, longWindow, money):
+def smatrade(stock_history , shortWindow, longWindow, money, trade_fee):
     dfTrade = create_Trade_df(stock_history, shortWindow, longWindow)
     capital = []
     bought = False
-    stock = 0
+    stock = 0    
     for index, row in dfTrade.iterrows():
+        traded = 0
         if bought:    
             if row["short"] < row["long"]:
-                money = sell(row["Adj Close"], money, stock)
+                money = sell(row["Adj Close"], money, stock, trade_fee)
                 stock = 0
                 bought = False
+                traded = 1
         else:
             if row["short"] > row["long"]:
-                stock, money = buy(row["Adj Close"], money)
+                stock, money = buy(row["Adj Close"], money, trade_fee)
                 bought = True
-        capital.append(stock*row["Adj Close"]+money)
-    capitalindexed = pd.DataFrame(index=(dfTrade.index), data = capital, columns = ["capital"])
+                traded = 2            
+        capital.append([stock*row["Adj Close"]+money, traded])
+    capitalindexed = pd.DataFrame(index=(dfTrade.index), data = capital, columns = ["capital", "trade"])
     return capitalindexed
 
 
-def perform_trade(ticker, sw_range = SW_RANGE, lw_range= LW_RANGE, money= 10000):
+def perform_trade(ticker, sw_range = SW_RANGE, lw_range= LW_RANGE, money= 10000, trade_fee = 0.0025):
     start = time.time()
     l = []
     try:
         stock_history = pd.read_csv(f"s_and_p_stock_data/{ticker}.csv", index_col = 0, parse_dates = True)
         for sw in sw_range:
             for lw in lw_range:               
-                capital = smatrade(stock_history, sw, lw, money)
+                capital = smatrade(stock_history, sw, lw, money, trade_fee)
                 l.append({"return": calculate_series_return(capital["capital"]), "capital": capital, "sw": sw, "lw": lw})
         logging.info(f"{ticker}: Done DURATION: {time.time()-start}")
         return pd.DataFrame(l)
@@ -84,7 +91,7 @@ def single_process():
 
 def multi_process_map():
     with mp.Pool() as p:               
-        return p.map(perform_trade, SPCOMPANIES[:1])
+        return p.map(perform_trade, SPCOMPANIES)
 
 #nicht schneller 
 def multi_process_imap():
@@ -105,4 +112,4 @@ if __name__ == "__main__":
     # save_obj(multi_ret_dict, "S_P500_sma_calculation")
     duration_multi = time.time()-start
     logging.info(f"Multi Process map: {duration_multi}")
-
+    

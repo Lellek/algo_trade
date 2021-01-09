@@ -18,7 +18,7 @@ calc_dict = load_obj("calc_dict")
 def calc_simple_return(ticker):
     data = pd.read_csv(f"s_and_p_stock_data/{ticker}.csv", index_col = 0, parse_dates = True)
     data = data.sort_values(by = "Date")
-    return calculate_series_return(data["Adj Close"])
+    return calculate_series_return(data["Adj Close"][199:])
     
 
 def calc_lw_sw_perf(calc_dict, q):
