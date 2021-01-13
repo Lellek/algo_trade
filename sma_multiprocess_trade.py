@@ -11,15 +11,15 @@ import multiprocessing as mp
 import time
 import logging
 import math
-
+import datetime
 
 SPCOMPANIES = load_obj("SandP_Tickers")
 logging.basicConfig(filename='Multi.log', level=logging.INFO)
 logging.getLogger().addHandler(logging.StreamHandler())
 
 # beide Ranges auch niedriger starten lassen nächstes mal
-SW_RANGE = range(5,51,5)
-LW_RANGE = range(60,201,10)
+SW_RANGE = range(50,51,5)
+LW_RANGE = range(200,201,10)
 
 
     
@@ -49,7 +49,7 @@ def sell(price, money, stock, trade_fee):
 # Trading strat: sell if sma_sw < sma_lw 
 def smatrade(stock_history , shortWindow, longWindow, money, trade_fee):
     dfTrade = create_Trade_df(stock_history, shortWindow, longWindow)
-    capital = []
+    capital = [[money, 0]]
     bought = False
     stock = 0    
     for index, row in dfTrade.iterrows():
@@ -66,7 +66,11 @@ def smatrade(stock_history , shortWindow, longWindow, money, trade_fee):
                 bought = True
                 traded = 2            
         capital.append([stock*row["Adj Close"]+money, traded])
-    capitalindexed = pd.DataFrame(index=(dfTrade.index), data = capital, columns = ["capital", "trade"])
+    ind = list(dfTrade.index)
+    first_date = ind[0] - datetime.timedelta(1)
+    ind = [first_date] + ind
+    capitalindexed = pd.DataFrame(index=ind, data = capital, columns = ["capital", "trade"])
+    
     return capitalindexed
 
 
@@ -91,16 +95,7 @@ def single_process():
 
 def multi_process_map():
     with mp.Pool() as p:               
-        return p.map(perform_trade, SPCOMPANIES)
-
-#nicht schneller 
-def multi_process_imap():
-    with mp.Pool() as p:               
-        return list(p.imap(perform_trade, SPCOMPANIES))
-#nicht schneller 
-def multi_process_imap_unordered():
-    with mp.Pool() as p:               
-        return list(p.imap_unordered(perform_trade, SPCOMPANIES))
+        return p.map(perform_trade, SPCOMPANIES[:1])
 
 
 if __name__ == "__main__":
